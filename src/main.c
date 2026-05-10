@@ -1,101 +1,92 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "audio_capture.h"
-#include "vosk_recognizer.h"
+#include "whisper.h"
 
 void process_command(const char *text) {
-    printf("📝 Обработка команды: \"%s\"\n", text);
-    
-    if (strstr(text, "привет")) {
-        printf("👋 Привет!\n");
+    printf("Обработка: \"%s\"\n", text);
+    if (strstr(text, "привет") || strstr(text, "Привет")) {
+        printf("Привет!\n");
         system("say 'Привет!'");
     }
     else if (strstr(text, "как дела")) {
-        printf("Отлично. Я готов к работе\n");
-        system("say 'Отлично. Я готов к работе'");
+        printf("Отлично!\n");
+        system("say 'Отлично!'");
     }
     else if (strlen(text) > 0) {
-        printf("❓ Неизвестная команда: %s\n", text);
-    }
-    else {
-        printf("⚠️ Пустая команда\n");
+        printf("Неизвестно: %s\n", text);
     }
 }
 
-int main() {
-    printf("🚀 Voice Assistant v0.1\n");
-    printf("========================\n\n");
+int main(int argc, char** argv) {
+    const char* model_path = (argc > 1) ? argv[1] : "models/ggml-model.bin";
+    printf("Voice Assistant (Whisper)\nМодель: %s\n\n", model_path);
     
     if (audio_init() != 0) {
-        fprintf(stderr, "❌ Ошибка инициализации аудио\n");
+        fprintf(stderr, "Ошибка аудио\n");
         return 1;
     }
-    printf("✅ Аудио инициализировано\n");
     
-    VoskContext vosk;
-    if (vosk_init(&vosk, "models/vosk-model-small-ru-0.22") != 0) {
+    struct whisper_context_params cparams = whisper_context_default_params();
+    struct whisper_context* ctx = whisper_init_from_file_with_params(model_path, cparams);
+    if (!ctx) {
+        fprintf(stderr, "Ошибка модели\n");
         audio_terminate();
         return 1;
     }
     
-    printf("\n🎙️ Готов! Нажми Ctrl+C для выхода\n\n");
+    struct whisper_full_params wparams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    wparams.print_progress = false;
+    wparams.print_special = false;
+    wparams.print_realtime = false;
+    wparams.print_timestamps = false;
+    wparams.translate = false;
+    wparams.language = "ru";
+    wparams.n_threads = 4;
     
-    int cycle = 0;
+    printf("Готов! Говори (Ctrl+C для выхода)\n\n");
+    
     while (1) {
-        cycle++;
-        printf("=== Цикл %d ===\n", cycle);
-        
         AudioBuffer audio = {0};
-        
-        printf("🎤 Запись 4 секунд...\n");
-        if (audio_record(&audio, 5) != 0) {
-            break;
-        }
-        
-        printf("📊 Записано: %d сэмплов\n", audio.numSamples);
+        printf("Запись 5 сек...\n");
+        if (audio_record(&audio, 5) != 0) break;
         
         if (audio.numSamples == 0) {
-            printf("⚠️ Пустая запись\n");
             audio_buffer_free(&audio);
             continue;
         }
         
-        // Конвертация
-        short *audioShort = (short*)malloc(audio.numSamples * sizeof(short));
-        if (!audioShort) {
-            printf("❌ Ошибка malloc\n");
-            audio_buffer_free(&audio);
-            continue;
+        // Данные уже в float [-1.0, 1.0] от PortAudio!
+        // НЕ конвертируем, передаём напрямую в whisper
+        printf("Распознаю...\n");
+        if (whisper_full(ctx, wparams, audio.samples, audio.numSamples) == 0) {
+            int n = whisper_full_n_segments(ctx);
+            char text[512] = {0};
+            int offset = 0;
+            
+            for (int i = 0; i < n && offset < 500; i++) {
+                const char* seg = whisper_full_get_segment_text(ctx, i);
+                int len = strlen(seg);
+                if (len > 0 && seg[0] != '[') {
+                    if (offset > 0) text[offset++] = ' ';
+                    if (offset + len < 500) {
+                        strcpy(text + offset, seg);
+                        offset += len;
+                    }
+                }
+            }
+            
+            printf("Распознано: \"%s\"\n", text);
+            if (strlen(text) > 0) process_command(text);
         }
         
-        audio_float_to_short(audio.samples, audioShort, audio.numSamples);
-        printf("🔧 Конвертировано в int16\n");
-        
-        // Распознавание
-        char recognizedText[256] = {0};
-        printf("🧠 Вызываю vosk_recognize...\n");
-        
-        bool success = vosk_recognize(&vosk, audioShort, audio.numSamples, 
-                                      recognizedText, sizeof(recognizedText));
-        
-        printf("✅ vosk_recognize вернул: %s\n", success ? "true" : "false");
-        printf("📝 Текст: '%s'\n", recognizedText);
-        
-        // Обработка в любом случае (даже если пусто)
-        if (strlen(recognizedText) > 0) {
-            process_command(recognizedText);
-        } else {
-            printf("😶 Пустой результат\n");
-        }
-        
-        free(audioShort);
         audio_buffer_free(&audio);
         printf("\n");
     }
     
-    vosk_cleanup(&vosk);
+    whisper_free(ctx);
     audio_terminate();
-    printf("\n👋 До свидания!\n");
     return 0;
 }

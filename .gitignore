@@ -1,0 +1,24 @@
+# Сборка
+build/
+*.o
+*.a
+*.dylib
+*.so
+
+# Модели (большие файлы)
+models/*.bin
+
+# Тестовые записи
+*.wav
+
+# Временные файлы
+.DS_Store
+*.log
+
+# Python venv
+venv/
+__pycache__/
+deps/whisper.cpp/
+openai-whispe/
+deps/whisper.cpp/
+openai-whispe/
