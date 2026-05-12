@@ -1,24 +1,18 @@
 # Сборка
 build/
 *.o
-*.a
 *.dylib
-*.so
+*.a
+.DS_Store
 
 # Модели (большие файлы)
 models/*.bin
+models/*.pt
 
-# Тестовые записи
-*.wav
+# Старые зависимости
+piper/
+lib/
+include/vosk_api.h
 
-# Временные файлы
-.DS_Store
-*.log
-
-# Python venv
-venv/
-__pycache__/
-deps/whisper.cpp/
-openai-whispe/
-deps/whisper.cpp/
-openai-whispe/
+# Whisper submodule (если есть)
+whisper/
