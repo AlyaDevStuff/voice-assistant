@@ -137,7 +137,3 @@ export DYLD_LIBRARY_PATH=deps/whisper.cpp/build/src:deps/whisper.cpp/build/ggml/
 ### Нет звука или тихая запись
 
 Проверьте настройки микрофона в macOS: **Системные настройки → Звук → Вход**
-
-## 📜 Лицензия
-
-MIT License
