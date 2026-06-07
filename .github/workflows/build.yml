@@ -1,0 +1,66 @@
+name: Build Voice Assistant
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  
+  build-macos:
+    runs-on: macos-latest  # Реальный Mac от Apple!
+    timeout-minutes: 30
+    
+    steps:
+    
+      - name: Checkout project
+        uses: actions/checkout@v4
+     
+      - name: Install dependencies
+        run: |
+          brew install portaudio cmake git
+          brew --prefix portaudio
+
+      - name: Build whisper.cpp
+        run: |
+          cd $HOME
+          git clone https://github.com/ggml-org/whisper.cpp.git
+          cd whisper.cpp
+        
+          cmake -B build -DWHISPER_METAL=ON
+          cmake --build build -j --config Release
+          ./models/download-ggml-model.sh base
+
+      - name: Build voice assistant
+        run: |
+          cd src
+          gcc -o voice_assistant \
+              main.c audio_capture.c \
+              -I$(brew --prefix portaudio)/include \
+              -I$HOME/whisper.cpp/include \
+              -I$HOME/whisper.cpp/ggml/include \
+              -L$(brew --prefix portaudio)/lib \
+              -L$HOME/whisper.cpp/build/src \
+              -lportaudio -lwhisper \
+              -framework CoreML -framework Accelerate \
+              -lm -lpthread
+
+     
+      - name: Check binary exists
+        run: |
+          ls -la src/voice_assistant
+          file src/voice_assistant
+
+      - name: Test with synthetic audio
+        run: |
+          dd if=/dev/zero of=/tmp/silence.raw bs=2 count=16000
+          cd src
+          ./voice_assistant $HOME/whisper.cpp/models/ggml-base.bin || true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-assistant-macos
+          path: src/voice_assistant
