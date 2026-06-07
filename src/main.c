@@ -5,168 +5,70 @@
 #include "audio_capture.h"
 #include "whisper.h"
 
-// ============ КОМАНДЫ ============
-
-typedef struct {
-    const char *keywords[4];   // Варианты названий
-    const char *action;         // Команда macOS
-    const char *response;       // Что сказать (опционально)
-} Command;
-
-Command commands[] = {
-    // Почта
-    {{"почта", "mail", "gmail", NULL}, 
-     "open -a Mail", 
-     "Открываю почту"},
-    
-    // Браузеры
-    {{"браузер", "chrome", "хром", NULL}, 
-     "open -a \"Google Chrome\"", 
-     "Открываю браузер"},
-    
-    {{"сафари", "safari", NULL}, 
-     "open -a Safari", 
-     "Открываю Safari"},
-    
-    // Мессенджеры
-    {{"телеграм", "telegram", "тг", NULL}, 
-     "open -a Telegram", 
-     "Открываю телеграм"},
-    
-    {{"вотсап", "whatsapp", NULL}, 
-     "open -a WhatsApp", 
-     "Открываю WhatsApp"},
-    
-    // Разработка
-    {{"терминал", "консоль", NULL}, 
-     "open -a Terminal", 
-     "Открываю терминал"},
-    
-    {{"код", "vscode", NULL}, 
-     "open -a \"Visual Studio Code\"", 
-     "Открываю код"},
-    
-    // Медиа
-    {{"музыка", "spotify", NULL}, 
-     "open -a Spotify", 
-     "Включаю музыку"},
-    
-    {{"ютуб", "youtube", NULL}, 
-     "open -a \"Google Chrome\" \"https://youtube.com\"", 
-     "Открываю YouTube"},
-    
-    // Система
-    {{"настройки", "системные настройки", NULL}, 
-     "open -a \"System Settings\"", 
-     "Открываю настройки"},
-    
-    {NULL, NULL, NULL}
-};
-
-// ============ РАБОТА С ТЕКСТОМ ============
-
-// Простой lowercase для UTF-8 (русский + английский)
-void to_lower(char *str) {
-    unsigned char *p = (unsigned char *)str;
-    while (*p) {
-        // Русские заглавные А-Я (кроме Ё)
-        if (p[0] == 0xD0 && p[1] >= 0x90 && p[1] <= 0xAF) {
-            p[1] += 0x20;  // А→а, Б→б, ...
-            p += 2;
-        }
-        // Ё → ё
-        else if (p[0] == 0xD0 && p[1] == 0x81) {
-            p[0] = 0xD1; p[1] = 0x91;
-            p += 2;
-        }
-        // Английские A-Z
-        else if (*p >= 'A' && *p <= 'Z') {
-            *p += ('a' - 'A');
-            p++;
-        }
-        else {
-            p++;
-        }
-    }
-}
-
-// Проверяет, есть ли слово в тексте
-int word_in_text(const char *text, const char *word) {
-    return strstr(text, word) != NULL;
-}
-
-// ============ ОБРАБОТКА КОМАНД ============
-
-void process_command(const char *raw_text) {
-    // Копируем и приводим к нижнему регистру
-    char text[512];
-    strncpy(text, raw_text, sizeof(text) - 1);
-    text[sizeof(text) - 1] = '\0';
-    to_lower(text);
-    
+void process_command(const char *text) {
     printf("Обработка: \"%s\"\n", text);
-    
-    // 1. Проверяем, обращались ли к Юре
-    if (!word_in_text(text, "юр")) {
-        printf("  → Не услышал 'Юр', игнорирую\n");
-        return;
+    if (strstr(text, "привет") || strstr(text, "Привет")) {
+        printf("Привет!\n");
+        system("say 'Привет!'");
     }
-    printf("  ✅ Обращение к Юре найдено\n");
-    
-    // 2. Ищем команду
-    for (int i = 0; commands[i].keywords[0] != NULL; i++) {
-        for (int k = 0; commands[i].keywords[k] != NULL; k++) {
-            if (word_in_text(text, commands[i].keywords[k])) {
-                printf("  🎯 Команда: %s\n", commands[i].response);
-                printf("  ⚡ Выполняю: %s\n", commands[i].action);
-                
-                // Говорим ответ
-                char say_cmd[256];
-                snprintf(say_cmd, sizeof(say_cmd), "say '%s'", commands[i].response);
-                system(say_cmd);
-                
-                // Выполняем действие
-                int result = system(commands[i].action);
-                if (result != 0) {
-                    printf("  ⚠️ Ошибка выполнения: %d\n", result);
-                    system("say 'Не получилось открыть'");
-                }
-                return;
-            }
-        }
+    else if (strstr(text, "Как дела")) {
+        printf("Отлично!\n");
+        system("say 'Отлично!'");
     }
-    
-    // 3. Команда не найдена
-    printf("  ❓ Не понял команду. Попробуй: 'Юр, открой почту'\n");
-    system("say 'Не понял команду'");
+    else if (strstr(text, "время") || strstr(text, "времени") || strstr(text, "Который час") || strstr(text, "Сколько сейчас")) {
+        system("say 'Сейчас' && date '+ %H:%M'");
+    }
+    else if (strstr(text, "браузер") || strstr(text, "сафари")) {
+        printf("Открываю Safari\n");
+        system("say 'Открываю Safari'");
+        system("open -a Safari");
+    }
+    else if (strstr(text, "почта") || strstr(text, "письма") || strstr(text, "почту")) {
+        printf("Открываю почту\n");
+        system("say 'Открываю почту'");
+        system("open -a Mail");
+    }
+    else if (strstr(text, "Выключи компьютер")) {
+        system("say 'Выключаю'");
+        system("osascript -e 'tell app \"System Events\" to shut down'");
+    }
+    else if (strstr(text, "Перезагрузи")) {
+        system("say 'Перезагружаю'");
+        system("osascript -e 'tell app \"System Events\" to restart'");
+    }
+    else if (strstr(text, "спящий режим") || strstr(text, "сон") || 
+             strstr(text, "засыпай") || strstr(text, "Иди спать")) {
+        printf("Спокойной ночи\n");
+        system("say 'Спокойной ночи'");
+        system("pmset sleepnow");
+    }
+    else if (strstr(text, "скриншот") || strstr(text, "снимок экрана")) {
+        printf("Сейчас\n");
+        system("say 'Сейчас'");
+        system("screencapture ~/Desktop/screenshot_$(date +%Y%m%d_%H%M%S).png");
+    }
+    else if (strlen(text) > 0) {
+        printf("Неизвестно: %s\n", text);
+    }
 }
-
-// ============ ГЛАВНАЯ ============
 
 int main(int argc, char** argv) {
-    const char* model_path = (argc > 1) ? argv[1] : "models/ggml-base.ru.bin";
+    const char* model_path = (argc > 1) ? argv[1] : "models/ggml-model.bin";
+    printf("Voice Assistant (Whisper)\nМодель: %s\n\n", model_path);
     
-    printf("╔═══════════════════════════════════════╗\n");
-    printf("║     🤖 Юра — Голосовой помощник      ║\n");
-    printf("╚═══════════════════════════════════════╝\n");
-    printf("Модель: %s\n\n", model_path);
-    
-    // Инициализация аудио
     if (audio_init() != 0) {
-        fprintf(stderr, "❌ Ошибка инициализации аудио\n");
+        fprintf(stderr, "Ошибка аудио\n");
         return 1;
     }
     
-    // Загрузка модели Whisper
     struct whisper_context_params cparams = whisper_context_default_params();
     struct whisper_context* ctx = whisper_init_from_file_with_params(model_path, cparams);
     if (!ctx) {
-        fprintf(stderr, "❌ Ошибка загрузки модели\n");
+        fprintf(stderr, "Ошибка модели\n");
         audio_terminate();
         return 1;
     }
     
-    // Настройки распознавания
     struct whisper_full_params wparams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     wparams.print_progress = false;
     wparams.print_special = false;
@@ -176,36 +78,27 @@ int main(int argc, char** argv) {
     wparams.language = "ru";
     wparams.n_threads = 4;
     
-    printf("Готов! Скажи: 'Юр, открой почту'\n");
-    printf("Для выхода: Ctrl+C\n\n");
+    printf("Готов! Говори (Ctrl+C для выхода)\n\n");
     
-    // Главный цикл
     while (1) {
         AudioBuffer audio = {0};
-        
-        printf("🎤 Запись 5 секунд...\n");
-        if (audio_record(&audio, 5) != 0) {
-            printf("❌ Ошибка записи\n");
-            break;
-        }
+        printf("Запись 5 сек...\n");
+        if (audio_record(&audio, 5) != 0) break;
         
         if (audio.numSamples == 0) {
             audio_buffer_free(&audio);
             continue;
         }
         
-        printf("🧠 Распознаю...\n");
+        printf("Распознаю...\n");
         if (whisper_full(ctx, wparams, audio.samples, audio.numSamples) == 0) {
             int n = whisper_full_n_segments(ctx);
             char text[512] = {0};
             int offset = 0;
             
-            // Собираем текст из сегментов
             for (int i = 0; i < n && offset < 500; i++) {
                 const char* seg = whisper_full_get_segment_text(ctx, i);
                 int len = strlen(seg);
-                
-                // Пропускаем артефакты вроде [музыка], [шум]
                 if (len > 0 && seg[0] != '[') {
                     if (offset > 0) text[offset++] = ' ';
                     if (offset + len < 500) {
@@ -215,24 +108,33 @@ int main(int argc, char** argv) {
                 }
             }
             
-            printf("📝 Распознано: \"%s\"\n", text);
-            
+            printf("Распознано: \"%s\"\n", text);
             if (strlen(text) > 0) {
                 process_command(text);
-            } else {
-                printf("  ⚠️ Ничего не распознано\n");
+                
+                // ====== КОМАНДА "ПОКА" — КОРРЕКТНОЕ ЗАВЕРШЕНИЕ ======
+                if (strstr(text, "пока") || strstr(text, "Пока") || 
+                    strstr(text, "до свидания") || strstr(text, "До свидания") ||
+                    strstr(text, "стоп") || strstr(text, "выход")) {
+                    printf("Завершение работы...\n");
+                    system("say 'До свидания'");
+                    audio_buffer_free(&audio);
+                    break; // Выход из while(1)
+                }
+                // =====================================================
             }
-        } else {
-            printf("❌ Ошибка распознавания\n");
         }
         
         audio_buffer_free(&audio);
         printf("\n");
     }
     
-    // Очистка
+    // ====== ОЧИСТКА ПАМЯТИ ПОСЛЕ ВЫХОДА ИЗ ЦИКЛА ======
+    printf("Освобождение ресурсов...\n");
     whisper_free(ctx);
     audio_terminate();
-    printf("\n👋 До свидания!\n");
+    printf("Голосовой ассистент завершён.\n");
+    // =====================================================
+    
     return 0;
 }
